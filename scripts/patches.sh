@@ -408,6 +408,29 @@ PY
 				info "cpufreq table-0: lower idle OPPs unlocked"
 			fi
 
+			# Remove the source tree's per-process uname spoof. Disclosure
+			# detects it as "uname spoofing (bpfloader/netbpfload/netd)".
+			SYS_C="${KERNEL_DIR}/kernel/sys.c"
+			if [ -f "$SYS_C" ] && grep -q '"bpfloader"' "$SYS_C"; then
+				python3 - "$SYS_C" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+old = (
+    '\tif (!strncmp(current->comm, "bpfloader", 9) ||\n'
+    '\t    !strncmp(current->comm, "netbpfload", 10) ||\n'
+    '\t    !strncmp(current->comm, "netd", 4)) {\n'
+    '\t\tstrcpy(tmp.release, "5.10.239");\n'
+    '\t\tpr_debug("fake uname: %s/%d release=%s\\n",\n'
+    '\t\t\t current->comm, current->pid, tmp.release);\n'
+    '\t}\n'
+)
+if old in s:
+    open(p, "w").write(s.replace(old, "", 1))
+PY
+				info "kernel/sys.c: per-process uname spoof removed"
+			fi
+
 			# Order matters and this is the tested one (4.19 + SukiSU builtin
 			# + SUSFS 1.5.5, no rejects):
 			#   path_umount and the hook patches both key off textual anchors
