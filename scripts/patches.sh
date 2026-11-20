@@ -379,6 +379,35 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 				info "localversion set to -${KERNEL_NAME}"
 			fi
 
+			# Unlock lower idle OPPs on the little cluster. The driver filters
+			# the hardware LUT against this DT table, so entries absent here
+			# are thrown away even when the SoC supports them.
+			CPU_DTS="${KERNEL_DIR}/arch/arm64/boot/dts/vendor/qcom/blair.dtsi"
+			if [ -f "$CPU_DTS" ] && grep -q 'qcom,cpufreq-table-0' "$CPU_DTS"; then
+				python3 - "$CPU_DTS" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+old = "\t\tqcom,cpufreq-table-0 =\n\t\t\t<1708800>,\n\t\t\t<1804800>;"
+new = (
+    "\t\tqcom,cpufreq-table-0 =\n"
+    "\t\t\t<300000>,\n"
+    "\t\t\t<576000>,\n"
+    "\t\t\t<806400>,\n"
+    "\t\t\t<1017600>,\n"
+    "\t\t\t<1228800>,\n"
+    "\t\t\t<1401600>,\n"
+    "\t\t\t<1516800>,\n"
+    "\t\t\t<1651200>,\n"
+    "\t\t\t<1708800>,\n"
+    "\t\t\t<1804800>;"
+)
+if old in s and "<300000>" not in s:
+    open(p, "w").write(s.replace(old, new))
+PY
+				info "cpufreq table-0: lower idle OPPs unlocked"
+			fi
+
 			# Order matters and this is the tested one (4.19 + SukiSU builtin
 			# + SUSFS 1.5.5, no rejects):
 			#   path_umount and the hook patches both key off textual anchors
