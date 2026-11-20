@@ -371,80 +371,25 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 		hooks)        hooks_patch_apply ;;
 		kpm)          kpm_patch_image "$2" ;;
 		all)
-			# This kernel tree ignores CONFIG_LOCALVERSION in its Makefile;
-			# the uname suffix comes from the root localversion file instead.
-			# Override it so KERNEL_NAME actually appears in `uname -r`.
-			if [ -n "${KERNEL_NAME:-}" ]; then
-				printf -- '-%s\n' "$KERNEL_NAME" > "${KERNEL_DIR}/localversion"
-				info "localversion set to -${KERNEL_NAME}"
-			fi
-
-			# Unlock lower idle OPPs on the little cluster. The driver filters
-			# the hardware LUT against this DT table, so entries absent here
-			# are thrown away even when the SoC supports them.
-			CPU_DTS="${KERNEL_DIR}/arch/arm64/boot/dts/vendor/qcom/blair.dtsi"
-			if [ -f "$CPU_DTS" ] && grep -q 'qcom,cpufreq-table-0' "$CPU_DTS"; then
-				python3 - "$CPU_DTS" <<'PY'
-import sys
+			# ReSukiSU v3.3.0 uses kprobes and does NOT export the old
+			# ksu_vfs_read_hook / ksu_execveat_hook / ksu_input_hook symbols.
+			# This source tree still calls them from fs/*.c, so remove those
+			# CONFIG_KSU blocks before compiling.
+			for f in fs/read_write.c fs/exec.c fs/open.c fs/stat.c; do
+				p="${KERNEL_DIR}/${f}"
+				[ -f "$p" ] || continue
+				python3 - "$p" <<'PY'
+import re, sys
 p = sys.argv[1]
 s = open(p).read()
-old = "\t\tqcom,cpufreq-table-0 =\n\t\t\t<1708800>,\n\t\t\t<1804800>;"
-new = (
-    "\t\tqcom,cpufreq-table-0 =\n"
-    "\t\t\t<300000>,\n"
-    "\t\t\t<576000>,\n"
-    "\t\t\t<806400>,\n"
-    "\t\t\t<1017600>,\n"
-    "\t\t\t<1228800>,\n"
-    "\t\t\t<1401600>,\n"
-    "\t\t\t<1516800>,\n"
-    "\t\t\t<1651200>,\n"
-    "\t\t\t<1708800>,\n"
-    "\t\t\t<1804800>;"
-)
-if old in s and "<300000>" not in s:
-    open(p, "w").write(s.replace(old, new))
+new = re.sub(
+    r'\n#ifdef CONFIG_KSU\n(?:(?!#endif).)*?ksu_(?:(?!#endif).)*?\n#endif\n',
+    '\n', s, flags=re.S)
+if new != s:
+    open(p, "w").write(new)
 PY
-				info "cpufreq table-0: lower idle OPPs unlocked"
-			fi
-
-			# Remove the source tree's per-process uname spoof. Disclosure
-			# detects it as "uname spoofing (bpfloader/netbpfload/netd)".
-			SYS_C="${KERNEL_DIR}/kernel/sys.c"
-			if [ -f "$SYS_C" ] && grep -q '"bpfloader"' "$SYS_C"; then
-				python3 - "$SYS_C" <<'PY'
-import sys
-p = sys.argv[1]
-s = open(p).read()
-old = (
-    '\tif (!strncmp(current->comm, "bpfloader", 9) ||\n'
-    '\t    !strncmp(current->comm, "netbpfload", 10) ||\n'
-    '\t    !strncmp(current->comm, "netd", 4)) {\n'
-    '\t\tstrcpy(tmp.release, "5.10.239");\n'
-    '\t\tpr_debug("fake uname: %s/%d release=%s\\n",\n'
-    '\t\t\t current->comm, current->pid, tmp.release);\n'
-    '\t}\n'
-)
-if old in s:
-    open(p, "w").write(s.replace(old, "", 1))
-PY
-				info "kernel/sys.c: per-process uname spoof removed"
-			fi
-
-			# Make /proc/version and uname -v show the ROM build date instead
-			# of our build date, so Disclosure no longer flags a custom kernel.
-			VERSION_C="${KERNEL_DIR}/init/version.c"
-			if [ -f "$VERSION_C" ]; then
-				python3 - "$VERSION_C" <<'PY'
-import sys
-p = sys.argv[1]
-s = open(p).read()
-fake = '"#1 SMP PREEMPT Sun Aug 30 18:12:18 UTC 2026"'
-if 'UTS_VERSION' in s:
-    open(p, "w").write(s.replace('UTS_VERSION', fake))
-PY
-				info "init/version.c: build date set to ROM date"
-			fi
+			done
+			info "old KernelSU 0.9.x source hooks removed for v3.3.0"
 
 			# Order matters and this is the tested one (4.19 + SukiSU builtin
 			# + SUSFS 1.5.5, no rejects):
