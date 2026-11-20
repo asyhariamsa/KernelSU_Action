@@ -137,6 +137,15 @@ build_kernel() {
 	make -j"$(nproc --all)" CC=clang $args "${KERNEL_CONFIG}" \
 		|| die "defconfig generation failed"
 
+	# SukiSU-Ultra's preinit runner needs $(objtree)/usr/include/linux/unistd.h.
+	# VectorKernel's own build.sh runs `make headers_install` before compiling;
+	# without it the submodule defines KSU_NO_PREINIT and fs/exec.c fails to link.
+	if [ -f "${KERNEL_DIR}/KernelSU/kernel/preinit/preinit.c" ]; then
+		info "Generating UAPI headers for KernelSU preinit"
+		make -j"$(nproc --all)" CC=clang $args headers_install \
+			|| die "headers_install failed"
+	fi
+
 	info "make ${args}"
 	# shellcheck disable=SC2086
 	make -j"$(nproc --all)" CC="$cc" $args \
