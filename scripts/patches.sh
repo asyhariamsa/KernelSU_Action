@@ -371,6 +371,14 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 		hooks)        hooks_patch_apply ;;
 		kpm)          kpm_patch_image "$2" ;;
 		all)
+			# This kernel tree ignores CONFIG_LOCALVERSION in its Makefile;
+			# the uname suffix comes from the root localversion file instead.
+			# Override it so KERNEL_NAME actually appears in `uname -r`.
+			if [ -n "${KERNEL_NAME:-}" ]; then
+				printf -- '-%s\n' "$KERNEL_NAME" > "${KERNEL_DIR}/localversion"
+				info "localversion set to -${KERNEL_NAME}"
+			fi
+
 			# Order matters and this is the tested one (4.19 + SukiSU builtin
 			# + SUSFS 1.5.5, no rejects):
 			#   path_umount and the hook patches both key off textual anchors
