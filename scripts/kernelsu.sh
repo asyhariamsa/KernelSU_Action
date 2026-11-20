@@ -237,7 +237,7 @@ ksu_hook_configs() {
 		kconf_enable "$defconfig" CONFIG_HAVE_KPROBES
 		kconf_enable "$defconfig" CONFIG_KPROBE_EVENTS
 		kconf_enable "$defconfig" CONFIG_KRETPROBES
-		[ "$variant" = "kernelsu-next" ] && kconf_enable "$defconfig" CONFIG_KSU_KPROBES_HOOK || true
+		[ "$variant" = "kernelsu-next" ] && kconf_enable "$defconfig" CONFIG_KSU_KPROBES_HOOK
 		;;
 	manual)
 		case "$variant" in
