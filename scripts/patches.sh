@@ -391,6 +391,73 @@ PY
 			done
 			info "old KernelSU 0.9.x source hooks removed for v3.3.0"
 
+			# --- cosmetic / battery fixes (same as the safe profile) --------
+			if [ -n "${KERNEL_NAME:-}" ]; then
+				printf -- '-%s\n' "$KERNEL_NAME" > "${KERNEL_DIR}/localversion"
+				info "localversion set to -${KERNEL_NAME}"
+			fi
+
+			CPU_DTS="${KERNEL_DIR}/arch/arm64/boot/dts/vendor/qcom/blair.dtsi"
+			if [ -f "$CPU_DTS" ] && grep -q 'qcom,cpufreq-table-0' "$CPU_DTS"; then
+				python3 - "$CPU_DTS" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+old = "\t\tqcom,cpufreq-table-0 =\n\t\t\t<1708800>,\n\t\t\t<1804800>;"
+new = (
+    "\t\tqcom,cpufreq-table-0 =\n"
+    "\t\t\t<300000>,\n"
+    "\t\t\t<576000>,\n"
+    "\t\t\t<806400>,\n"
+    "\t\t\t<1017600>,\n"
+    "\t\t\t<1228800>,\n"
+    "\t\t\t<1401600>,\n"
+    "\t\t\t<1516800>,\n"
+    "\t\t\t<1651200>,\n"
+    "\t\t\t<1708800>,\n"
+    "\t\t\t<1804800>;"
+)
+if old in s and "<300000>" not in s:
+    open(p, "w").write(s.replace(old, new))
+PY
+				info "cpufreq table-0: lower idle OPPs unlocked"
+			fi
+
+			SYS_C="${KERNEL_DIR}/kernel/sys.c"
+			if [ -f "$SYS_C" ] && grep -q '"bpfloader"' "$SYS_C"; then
+				python3 - "$SYS_C" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+old = (
+    '\tif (!strncmp(current->comm, "bpfloader", 9) ||\n'
+    '\t    !strncmp(current->comm, "netbpfload", 10) ||\n'
+    '\t    !strncmp(current->comm, "netd", 4)) {\n'
+    '\t\tstrcpy(tmp.release, "5.10.239");\n'
+    '\t\tpr_debug("fake uname: %s/%d release=%s\\n",\n'
+    '\t\t\t current->comm, current->pid, tmp.release);\n'
+    '\t}\n'
+)
+if old in s:
+    open(p, "w").write(s.replace(old, "", 1))
+PY
+				info "kernel/sys.c: per-process uname spoof removed"
+			fi
+
+			VERSION_C="${KERNEL_DIR}/init/version.c"
+			if [ -f "$VERSION_C" ]; then
+				python3 - "$VERSION_C" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+fake = '"#1 SMP PREEMPT Sun Aug 30 18:12:18 UTC 2026"'
+if 'UTS_VERSION' in s:
+    open(p, "w").write(s.replace('UTS_VERSION', fake))
+PY
+				info "init/version.c: build date set to ROM date"
+			fi
+			# ---------------------------------------------------------------
+
 			# Order matters and this is the tested one (4.19 + SukiSU builtin
 			# + SUSFS 1.5.5, no rejects):
 			#   path_umount and the hook patches both key off textual anchors
