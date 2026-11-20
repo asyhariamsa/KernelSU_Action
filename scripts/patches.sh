@@ -1,10 +1,3 @@
-#!/usr/bin/env bash
-# Kernel source patching: SUSFS, path_umount backport, hide_stuff, manual hooks.
-#
-# Everything here is idempotent and version-aware. Each step is skipped with a
-# clear message when it is unnecessary (feature already present) rather than
-# failing, because these trees are frequently already partially patched.
-
 set -euo pipefail
 # shellcheck source=scripts/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -371,6 +364,37 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 		hooks)        hooks_patch_apply ;;
 		kpm)          kpm_patch_image "$2" ;;
 		all)
+			# This kernel tree ignores CONFIG_LOCALVERSION in its Makefile;
+			# the uname suffix comes from the root localversion file instead.
+			# Override it so KERNEL_NAME actually appears in `uname -r`.
+			if [ -n "${KERNEL_NAME:-}" ]; then
+				printf -- '-%s\n' "$KERNEL_NAME" > "${KERNEL_DIR}/localversion"
+				info "localversion set to -${KERNEL_NAME}"
+			fi
+
+			# Remove the source tree's per-process uname spoof. Disclosure
+			# detects it as "uname spoofing (bpfloader/netbpfload/netd)".
+			SYS_C="${KERNEL_DIR}/kernel/sys.c"
+			if [ -f "$SYS_C" ] && grep -q '"bpfloader"' "$SYS_C"; then
+				python3 - "$SYS_C" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+old = (
+    '\tif (!strncmp(current->comm, "bpfloader", 9) ||\n'
+    '\t    !strncmp(current->comm, "netbpfload", 10) ||\n'
+    '\t    !strncmp(current->comm, "netd", 4)) {\n'
+    '\t\tstrcpy(tmp.release, "5.10.239");\n'
+    '\t\tpr_debug("fake uname: %s/%d release=%s\\n",\n'
+    '\t\t\t current->comm, current->pid, tmp.release);\n'
+    '\t}\n'
+)
+if old in s:
+    open(p, "w").write(s.replace(old, "", 1))
+PY
+				info "kernel/sys.c: per-process uname spoof removed"
+			fi
+
 			# Order matters and this is the tested one (4.19 + SukiSU builtin
 			# + SUSFS 1.5.5, no rejects):
 			#   path_umount and the hook patches both key off textual anchors
