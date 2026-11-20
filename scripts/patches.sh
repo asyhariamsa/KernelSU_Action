@@ -431,6 +431,21 @@ PY
 				info "kernel/sys.c: per-process uname spoof removed"
 			fi
 
+			# Make /proc/version and uname -v show the ROM build date instead
+			# of our build date, so Disclosure no longer flags a custom kernel.
+			VERSION_C="${KERNEL_DIR}/init/version.c"
+			if [ -f "$VERSION_C" ]; then
+				python3 - "$VERSION_C" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+fake = '"#1 SMP PREEMPT Sun Aug 30 18:12:18 UTC 2026"'
+if 'UTS_VERSION' in s:
+    open(p, "w").write(s.replace('UTS_VERSION', fake))
+PY
+				info "init/version.c: build date set to ROM date"
+			fi
+
 			# Order matters and this is the tested one (4.19 + SukiSU builtin
 			# + SUSFS 1.5.5, no rejects):
 			#   path_umount and the hook patches both key off textual anchors
