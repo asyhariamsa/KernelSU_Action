@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+# Kernel source patching: SUSFS, path_umount backport, hide_stuff, manual hooks.
 set -euo pipefail
 # shellcheck source=scripts/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
