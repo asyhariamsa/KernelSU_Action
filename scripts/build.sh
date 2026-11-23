@@ -148,9 +148,16 @@ build_kernel() {
 	fi
 
 	info "make ${args}"
+	set +e
 	# shellcheck disable=SC2086
-	make -j"$JOBS" CC="$cc" $args \
-		|| die "kernel build failed"
+	make -j"$JOBS" CC="$cc" $args 2>&1 | tee "${WORKSPACE}/build.log"
+	make_rc=${PIPESTATUS[0]}
+	set -e
+	if [ "$make_rc" -ne 0 ]; then
+		printf '%s\n' '===== LAST 80 LINES OF BUILD.LOG =====' >&2
+		tail -n 80 "${WORKSPACE}/build.log" >&2
+		die "kernel build failed"
+	fi
 
 	endgroup
 }
