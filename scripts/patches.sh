@@ -397,6 +397,35 @@ PY
 				info "kernel/sys.c: per-process uname spoof removed"
 			fi
 
+			# Hardening: STACKPROTECTOR_PER_TASK is `def_bool y` in this tree and
+			# overrides the defconfig's "is not set". When it is y, the kernel
+			# deliberately does NOT define __stack_chk_guard (canary via sp_el0),
+			# but clang 14 + full LTO still emits references to it -> link fails.
+			# Force it to n so the global canary path is used: process.c then
+			# defines __stack_chk_guard and boot_init_stack_canary() fills it.
+			KARCH_CFG="${KERNEL_DIR}/arch/arm64/Kconfig"
+			if [ -f "$KARCH_CFG" ] && grep -q 'config STACKPROTECTOR_PER_TASK' "$KARCH_CFG"; then
+				python3 - "$KARCH_CFG" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+old = (
+    'config STACKPROTECTOR_PER_TASK\n'
+    '\tdef_bool y\n'
+    '\tdepends on STACKPROTECTOR && CC_HAVE_STACKPROTECTOR_SYSREG\n'
+)
+new = (
+    'config STACKPROTECTOR_PER_TASK\n'
+    '\t# chrollo: force global canary (clang14 + full LTO breaks sysreg canary)\n'
+    '\tdef_bool n\n'
+    '\tdepends on STACKPROTECTOR && CC_HAVE_STACKPROTECTOR_SYSREG\n'
+)
+if old in s:
+    open(p, "w").write(s.replace(old, new, 1))
+PY
+				info "arch/arm64/Kconfig: STACKPROTECTOR_PER_TASK forced off"
+			fi
+
 			# Expose all hardware LUT frequencies by bypassing the DTB's
 			# qcom,cpufreq-table filter. DTB itself is NOT replaced, so
 			# wifi/touch/display stay on the ROM's known-good DTB.
