@@ -134,7 +134,8 @@ build_kernel() {
 	cd "$KERNEL_DIR"
 	info "make ${args} ${KERNEL_CONFIG}"
 	# shellcheck disable=SC2086
-	make -j"$(nproc --all)" CC=clang $args "${KERNEL_CONFIG}" \
+	JOBS=${JOBS:-4}
+	make -j"$JOBS" CC=clang $args "${KERNEL_CONFIG}" \
 		|| die "defconfig generation failed"
 
 	# SukiSU-Ultra's preinit runner needs $(objtree)/usr/include/linux/unistd.h.
@@ -142,13 +143,13 @@ build_kernel() {
 	# without it the submodule defines KSU_NO_PREINIT and fs/exec.c fails to link.
 	if [ -f "${KERNEL_DIR}/KernelSU/kernel/preinit/preinit.c" ]; then
 		info "Generating UAPI headers for KernelSU preinit"
-		make -j"$(nproc --all)" CC=clang $args headers_install \
+		make -j"$JOBS" CC=clang $args headers_install \
 			|| die "headers_install failed"
 	fi
 
 	info "make ${args}"
 	# shellcheck disable=SC2086
-	make -j"$(nproc --all)" CC="$cc" $args \
+	make -j"$JOBS" CC="$cc" $args \
 		|| die "kernel build failed"
 
 	endgroup
