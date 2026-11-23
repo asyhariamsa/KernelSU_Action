@@ -397,45 +397,6 @@ PY
 				info "kernel/sys.c: per-process uname spoof removed"
 			fi
 
-			# Expose all hardware LUT frequencies by ignoring the ROM DTB's
-			# qcom,cpufreq-table filter. Safer than replacing the whole DTB:
-			# wifi/touch and everything else in the DTB stay untouched.
-			CPUFREQ_C="${KERNEL_DIR}/drivers/cpufreq/qcom-cpufreq-hw.c"
-			if [ -f "$CPUFREQ_C" ]; then
-				python3 - "$CPUFREQ_C" <<'PY'
-import sys
-p = sys.argv[1]
-s = open(p).read()
-old = (
-    'static bool of_find_freq(u32 *of_table, int of_len, long frequency)\n'
-    '{\n'
-    '\tint i;\n'
-    '\n'
-    '\tif (!of_table)\n'
-    '\t\treturn true;\n'
-    '\n'
-    '\tfor (i = 0; i < of_len; i++) {\n'
-    '\t\tif (frequency == of_table[i])\n'
-    '\t\t\treturn true;\n'
-    '\t}\n'
-    '\n'
-    '\treturn false;\n'
-    '}'
-)
-new = (
-    'static bool of_find_freq(u32 *of_table, int of_len, long frequency)\n'
-    '{\n'
-    '\t/* Ignore the ROM DTB qcom,cpufreq-table filter so every OPP in the\n'
-    '\t * hardware LUT is exposed (idle can drop below 1708 MHz). */\n'
-    '\treturn true;\n'
-    '}'
-)
-if old in s:
-    open(p, "w").write(s.replace(old, new, 1))
-PY
-				info "qcom-cpufreq-hw: DTB frequency filter bypassed"
-			fi
-
 			# Order matters and this is the tested one (4.19 + SukiSU builtin
 			# + SUSFS 1.5.5, no rejects):
 			#   path_umount and the hook patches both key off textual anchors
