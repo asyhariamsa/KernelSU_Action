@@ -1184,6 +1184,8 @@ PY
 				info "qcom-cpufreq-hw: DTB frequency filter bypassed"
 			fi
 
+			adios_apply
+
 			# Order matters and this is the tested one (4.19 + SukiSU builtin
 			# + SUSFS 1.5.5, no rejects):
 			#   path_umount and the hook patches both key off textual anchors
