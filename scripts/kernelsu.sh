@@ -59,7 +59,10 @@ ksu_registry() {
 	rsuntk)
 		echo "https://github.com/rsuntk/KernelSU|main|KernelSU|main|main|susfs-rksu-master|RKSU (rsuntk)" ;;
 	backslashxx)
-		echo "https://github.com/backslashxx/KernelSU|master|KernelSU|master|master|-|backslashxx KernelSU" ;;
+		# backslashxx/KernelSU was deleted upstream on 2026-11-24.
+		# Najip/xxKSU is a byte-preserving backup (KSU_VERSION 32733,
+		# KSU_HACK_ARM64_BRANCH_LINK still present) on branch `final`.
+		echo "https://github.com/Najip/xxKSU|final|KernelSU|final|final|-|xxKSU (backslashxx backup)" ;;
 	*)
 		die "unknown KSU_VARIANT '$1'" ;;
 	esac
@@ -113,6 +116,15 @@ ksu_install() {
 	if [ -z "$requested_ref" ] && ksu_default_is_branch "$variant"; then
 		warn "${name}'s setup.sh defaults to the moving 'main' branch rather than a tag."
 		warn "Pin KSU_REF (e.g. a tag) if you need reproducible builds."
+	fi
+
+	# The backup's setup.sh still clones the now-deleted upstream URL.
+	# Pre-clone it ourselves so setup.sh sees ${dir}/ and skips that clone.
+	if [ "$variant" = "backslashxx" ] && [ ! -d "${KERNEL_DIR}/${dir}" ]; then
+		group "Cloning xxKSU backup"
+		git clone --depth 1 --branch "$ref" "$repo" "${KERNEL_DIR}/${dir}" \
+			|| die "failed to clone ${repo} at ${ref}"
+		endgroup
 	fi
 
 	# Run the variant's own installer.
