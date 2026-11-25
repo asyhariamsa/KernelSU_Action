@@ -154,8 +154,10 @@ build_kernel() {
 	make_rc=${PIPESTATUS[0]}
 	set -e
 	if [ "$make_rc" -ne 0 ]; then
-		printf '%s\n' '===== LAST 80 LINES OF BUILD.LOG =====' >&2
-		tail -n 80 "${WORKSPACE}/build.log" >&2
+		printf '%s\n' '===== ERROR LINES FROM BUILD.LOG =====' >&2
+		grep -n -i -m 60 -E 'error:|fatal error:|undefined reference|multiple definition|No such file' "${WORKSPACE}/build.log" >&2 || true
+		printf '%s\n' '===== LAST 40 LINES OF BUILD.LOG =====' >&2
+		tail -n 40 "${WORKSPACE}/build.log" >&2
 		die "kernel build failed"
 	fi
 
