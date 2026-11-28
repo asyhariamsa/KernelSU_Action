@@ -407,9 +407,9 @@ susfs_manual_apply() {
 	group "Applying SUSFS 1.5.5 kernel-side (5.4 fuzz port)"
 	local pf="${WORKSPACE}/susfs-kernel-5.4.patch"
 
-	python3 - "$pf" <<'PY'
+	python3 - "$pf" "${KERNEL_DIR}/fs/Kconfig" <<'PY'
 import sys, base64
-pf = sys.argv[1]
+pf, fs_kc = sys.argv[1], sys.argv[2]
 b64 = (
     "ZGlmZiAtLWdpdCBhL2ZzL01ha2VmaWxlIGIvZnMvTWFrZWZpbGUKaW5kZXggM2Q3MTdhNjdkNDM1Li4xZTFhNDk4MGEyZjQgMTAwNjQ0Ci0tLSBhL2ZzL01h"
     "a2VmaWxlCisrKyBiL2ZzL01ha2VmaWxlCkBAIC0xNSw2ICsxNSw4IEBAIG9iai15IDo9CW9wZW4ubyByZWFkX3dyaXRlLm8gZmlsZV90YWJsZS5vIHN1cGVy"
@@ -929,7 +929,6 @@ b64 = (
 )
 open(pf, "wb").write(base64.b64decode("".join(b64.split())))
 
-fs_kc = "fs/Kconfig"
 s = open(fs_kc).read()
 if "config KSU_SUSFS" not in s:
     s += """
@@ -1019,7 +1018,7 @@ config KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG
 """
     open(fs_kc, "w").write(s)
 PY
-	patch -p1 --force --fuzz=10 --no-backup-if-mismatch <"$pf" \
+	( cd "$KERNEL_DIR" && patch -p1 --force --fuzz=10 --no-backup-if-mismatch <"$pf" ) \
 		|| die "SUSFS kernel patch failed"
 	info "SUSFS kernel-side applied (fuzz=10; bootconfig hunk skipped; KSU-side skipped)"
 	endgroup
